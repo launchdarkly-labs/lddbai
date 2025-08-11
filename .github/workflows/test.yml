@@ -1,0 +1,52 @@
+name: Test Analyze Database Changes
+on: [pull_request]
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print working directory
+        run: pwd && ls -la
+      - name: Start Services
+        run: docker compose up -d
+      - name: wait ten seconds
+        run: sleep 10
+      - name: Migrate Database
+        run: cd tester && go run main.go
+      - name: Dump Schema For SQL Proxy
+        run: |
+          curl -X POST http://localhost:12345/schema_dump
+      - name: Run test suite
+        run: cd tester && go test -v
+      - name: Get SQL data
+        uses: droptableifexists/recon@main
+        id: get-sql-data
+        with:
+          SQL_PROXY_API_ADDRESS: localhost:12345
+          DEFAULT_DATABASE: defaultdb
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Save SQL data to file
+        run: |
+          cat << EOF > analysis_input.json
+          {
+            "sql_queries": ${{  toJSON(steps.get-sql-data.outputs.sql-queries) }},
+            "queries_diff": ${{  toJSON(steps.get-sql-data.outputs.queries-diff) }},
+            "schema": ${{  toJSON(steps.get-sql-data.outputs.schema) }},
+            "schema_diff": ${{  toJSON(steps.get-sql-data.outputs.schema-diff) }}
+          }
+          EOF
+          echo "Created analysis_input.json:"
+          cat analysis_input.json
+
+      - name: Run Database Analysis
+        uses: ./
+        with:
+          message: "Analyzing database changes..."
+          input_file: analysis_input.json
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          launchdarkly_sdk_key: ${{ secrets.LAUNCHDARKLY_SDK_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pull_request_number: ${{ github.event.pull_request.number }}
+      - name: Stop Services
+        run: docker compose down

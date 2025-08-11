@@ -1,0 +1,3 @@
+openai>=1.0.0
+launchdarkly-server-sdk==9.6.0
+launchdarkly-server-sdk-ai>=0.8.1
