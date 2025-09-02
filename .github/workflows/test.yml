@@ -22,6 +22,7 @@ jobs:
         uses: droptableifexists/recon@main
         id: get-sql-data
         with:
+          SKIP_SCHEMA_DUMP: false
           SQL_PROXY_API_ADDRESS: localhost:12345
           DEFAULT_DATABASE: defaultdb
           GITHUB_REPOSITORY: ${{ github.repository }}
