@@ -22,6 +22,13 @@ func TestMain(t *testing.T) {
 		t.Fatalf("Failed to query test database: %v", err)
 	}
 	defer rows.Close()
+
+	sql = "SELECT * FROM test_schema.testtable2 where bunch_of_nested_json->>'test'->>'test2' = 'test3'"
+	rows, err = db.Query(sql)
+	if err != nil {
+		t.Fatalf("Failed to query test database: %v", err)
+	}
+	defer rows.Close()
 }
 
 func getTestDbConnection() (*sql.DB, error) {
