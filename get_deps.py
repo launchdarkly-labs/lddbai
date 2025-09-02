@@ -31,7 +31,7 @@ class Deps:
         # print(sdk_key)
         if not sdk_key:
             # test account - https://app.ld.catamorphic.com/projects/ld-db-ai/ai-configs?selected-env=production&env=production&env=test
-            sdk_key = "sdk-ed735e05-b610-447e-b59b-7be4a525749c"
+            sdk_key = "sdk-d0c169b4-51bd-467e-8c08-4f15db8b1265"
             
         # Set the configuration with custom endpoints
         ldclient.set_config(Config(

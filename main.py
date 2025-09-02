@@ -8,44 +8,72 @@ from ldai.client import AIConfig, ModelConfig, LDMessage, ProviderConfig, Contex
 from ldai.tracker import TokenUsage
 
 # Automatically picks up OPENAI_API_KEY from env
-client = OpenAI()
+try:
+    client = OpenAI()
+except Exception as e:
+    client = None
+    client_error = str(e)
 
 def get_ai_config(payload: dict) -> tuple[AIConfig, LDAIConfigTracker]:
-    aiclient = Deps().get_launchdarkly_ai()
-    context = Context.builder('cockroachdb').kind('database').name('cockroachdb').build()
-    fallback_value = AIConfig(
-        enabled=True,
-        model=ModelConfig(
-            name="gpt-4o-mini",
-            parameters={"temperature": 0.8},
-        ),
-        messages=[LDMessage(role="system", content="")],
-        provider=ProviderConfig(name="my-default-provider"),
-    )
-    return aiclient.config('evaluate-database-changes', context, fallback_value, { 
-        'schema': payload.get('schema', []),
-        'schema_diff': payload.get('schema_diff', []),
-        'sql_queries': payload.get('sql_queries', []),
-        'queries_diff': payload.get('queries_diff', [])
-    })
+    try:
+        aiclient = Deps().get_launchdarkly_ai()
+        context = Context.builder('cockroachdb').kind('database').name('cockroachdb').build()
+        fallback_value = AIConfig(
+            enabled=True,
+            model=ModelConfig(
+                name="gpt-4o-mini",
+                parameters={"temperature": 0.8},
+            ),
+            messages=[LDMessage(role="system", content="")],
+            provider=ProviderConfig(name="my-default-provider"),
+        )
+        return aiclient.config('evaluate-database-changes', context, fallback_value, { 
+            'schema': payload.get('schema', []),
+            'schema_diff': payload.get('schema_diff', []),
+            'sql_queries': payload.get('sql_queries', []),
+            'queries_diff': payload.get('queries_diff', [])
+        })
+    except Exception as e:
+        raise Exception(f"LaunchDarkly AI configuration failed: {str(e)}")
 
 def get_openai_recommendation(payload: dict) -> str:
-    config, tracker = get_ai_config(payload)
-    # print("config:")
-    # pprint(config)
-    messages = [] if config.messages is None else config.messages
-    # print([message.to_dict() for message in messages])
-    response = tracker.track_openai_metrics(
-        lambda:
-            client.chat.completions.create(
-                model=config.model.name,
-                messages=[message.to_dict() for message in messages],
-            )
-    )
-    ldclient = Deps().get_launchdarkly()
-    ldclient.flush()
+    # Check if OpenAI client was initialized successfully
+    if client is None:
+        return f"Cannot evaluate database changes because OpenAI client initialization failed: {client_error}"
     
-    return response.choices[0].message.content
+    try:
+        config, tracker = get_ai_config(payload)
+        # print("config:")
+        # pprint(config)
+        
+        # Validate config structure
+        if config is None:
+            return "Cannot evaluate database changes because AI configuration is None"
+        
+        if config.model is None:
+            return "Cannot evaluate database changes because AI model configuration is None"
+        
+        if config.model.name is None:
+            return "Cannot evaluate database changes because AI model name is None"
+        
+        messages = [] if config.messages is None else config.messages
+        # print([message.to_dict() for message in messages])
+        response = tracker.track_openai_metrics(
+            lambda:
+                client.chat.completions.create(
+                    model=config.model.name,
+                    messages=[message.to_dict() for message in messages],
+                )
+        )
+        ldclient = Deps().get_launchdarkly()
+        ldclient.flush()
+        
+        return response.choices[0].message.content
+    except Exception as e:
+        # Check if this is a LaunchDarkly AI config error
+        if "LaunchDarkly AI configuration failed" in str(e):
+            return f"Cannot evaluate database changes because {str(e)}"
+        return f"Cannot evaluate database changes because OpenAI API request failed: {str(e)}"
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze database changes')
@@ -60,7 +88,12 @@ def main():
             # print(input_data)                               # TODO: remove debug print
         
         # First parse the outer JSON structure
-        payload = json.loads(input_data)
+        try:
+            payload = json.loads(input_data)
+        except json.JSONDecodeError as e:
+            print("Cannot evaluate database changes because the input JSON is malformed:", str(e))
+            return
+            
         if (payload.get('queries_diff') is None or len(payload.get('queries_diff')) == 0) and (payload.get('schema_diff') is None or len(payload.get('schema_diff')) == 0):
             print("There are no changes to the database, so this PR will not affect the database.")
             return
@@ -78,12 +111,15 @@ def main():
         # print("\n🔍 Parsed Payload:")                      # TODO: remove debug print
         # print(json.dumps(payload, indent=2))               # TODO: remove debug print
 
-    except json.JSONDecodeError as e:
-        print(f"❌ Failed to parse input JSON: {e}")
-        sys.exit(1)
     except FileNotFoundError:
-        print(f"❌ Input file not found: {args.input_file}")
-        sys.exit(1)
+        print(f"Cannot evaluate database changes because the input file was not found: {args.input_file}")
+        return
+    except PermissionError:
+        print(f"Cannot evaluate database changes because permission was denied to read the input file: {args.input_file}")
+        return
+    except Exception as e:
+        print(f"Cannot evaluate database changes because an error occurred while reading the input file: {str(e)}")
+        return
 
     recommendations = get_openai_recommendation(payload)
     print("\n📌 LD-DBAi Recommendations:\n")

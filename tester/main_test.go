@@ -22,10 +22,17 @@ func TestMain(t *testing.T) {
 		t.Fatalf("Failed to query test database: %v", err)
 	}
 	defer rows.Close()
+
+	sql = "SELECT * FROM test_schema.testtable2 where bunch_of_nested_json->'test'->>'test2' = 'test3'"
+	rows, err = db.Query(sql)
+	if err != nil {
+		t.Fatalf("Failed to query test database: %v", err)
+	}
+	defer rows.Close()
 }
 
 func getTestDbConnection() (*sql.DB, error) {
-	connStr := "host=localhost port=26258 user=root dbname=defaultdb sslmode=disable"
+	connStr := "host=localhost port=26258 user=root dbname=testdb sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err

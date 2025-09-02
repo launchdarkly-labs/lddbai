@@ -38,6 +38,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	_, err = db.Exec("CREATE TABLE test_schema.testtable2 (id INT, name VARCHAR(255), bunch_of_nested_json JSONB)")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Insert a row
 	_, err = db.Exec("INSERT INTO test_schema.testtable (id, name) VALUES (1, 'test')")
 	if err != nil {

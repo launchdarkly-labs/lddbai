@@ -22,23 +22,35 @@ jobs:
         uses: droptableifexists/recon@main
         id: get-sql-data
         with:
+          SKIP_SCHEMA_DUMP: false
           SQL_PROXY_API_ADDRESS: localhost:12345
           DEFAULT_DATABASE: defaultdb
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Save SQL data to file
+        if: always() && github.ref != 'refs/heads/main'
         run: |
-          cat << EOF > analysis_input.json
-          {
-            "sql_queries": ${{  toJSON(steps.get-sql-data.outputs.sql-queries) }},
-            "queries_diff": ${{  toJSON(steps.get-sql-data.outputs.queries-diff) }},
-            "schema": ${{  toJSON(steps.get-sql-data.outputs.schema) }},
-            "schema_diff": ${{  toJSON(steps.get-sql-data.outputs.schema-diff) }}
-          }
-          EOF
+          # The recon action should create all four files - check if they exist and create empty ones if missing
+          for file in sql-queries.json queries-diff.json full-schema.json schema-diff.json; do
+            if [ ! -f "$file" ]; then
+              echo "Warning: $file not found, creating empty object"
+              echo '{}' > "$file"
+            fi
+          done
+          # Use jq to properly combine all four JSON files into the expected structure
+          jq -n \
+            --slurpfile sql_queries sql-queries.json \
+            --slurpfile queries_diff queries-diff.json \
+            --slurpfile schema full-schema.json \
+            --slurpfile schema_diff schema-diff.json \
+            '{
+              "sql_queries": $sql_queries[0],
+              "queries_diff": $queries_diff[0],
+              "schema": $schema[0],
+              "schema_diff": $schema_diff[0]
+            }' > analysis_input.json
           echo "Created analysis_input.json:"
           cat analysis_input.json
-
       - name: Run Database Analysis
         uses: ./
         with:
