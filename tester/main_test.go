@@ -32,7 +32,7 @@ func TestMain(t *testing.T) {
 }
 
 func getTestDbConnection() (*sql.DB, error) {
-	connStr := "host=localhost port=26258 user=root dbname=defaultdb sslmode=disable"
+	connStr := "host=localhost port=26258 user=root dbname=testdb sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
