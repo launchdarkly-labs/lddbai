@@ -45,6 +45,17 @@ def get_openai_recommendation(payload: dict) -> str:
         config, tracker = get_ai_config(payload)
         # print("config:")
         # pprint(config)
+        
+        # Validate config structure
+        if config is None:
+            return "Cannot evaluate database changes because AI configuration is None"
+        
+        if config.model is None:
+            return "Cannot evaluate database changes because AI model configuration is None"
+        
+        if config.model.name is None:
+            return "Cannot evaluate database changes because AI model name is None"
+        
         messages = [] if config.messages is None else config.messages
         # print([message.to_dict() for message in messages])
         response = tracker.track_openai_metrics(
