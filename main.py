@@ -6,28 +6,13 @@ from openai import OpenAI
 from pprint import pprint
 from ldai.client import AIConfig, ModelConfig, LDMessage, ProviderConfig, Context, LDAIConfigTracker
 from ldai.tracker import TokenUsage
+from generate_prompt import get_ai_config_full_evaluation
 
 # Automatically picks up OPENAI_API_KEY from env
 client = OpenAI()
 
 def get_ai_config(payload: dict) -> tuple[AIConfig, LDAIConfigTracker]:
-    aiclient = Deps().get_launchdarkly_ai()
-    context = Context.builder('cockroachdb').kind('database').name('cockroachdb').build()
-    fallback_value = AIConfig(
-        enabled=True,
-        model=ModelConfig(
-            name="gpt-4o-mini",
-            parameters={"temperature": 0.8},
-        ),
-        messages=[LDMessage(role="system", content="")],
-        provider=ProviderConfig(name="my-default-provider"),
-    )
-    return aiclient.config('evaluate-database-changes', context, fallback_value, { 
-        'schema': payload.get('schema', []),
-        'schema_diff': payload.get('schema_diff', []),
-        'sql_queries': payload.get('sql_queries', []),
-        'queries_diff': payload.get('queries_diff', [])
-    })
+    return get_ai_config_full_evaluation(payload)
 
 def get_openai_recommendation(payload: dict) -> str:
     config, tracker = get_ai_config(payload)
@@ -40,6 +25,7 @@ def get_openai_recommendation(payload: dict) -> str:
             client.chat.completions.create(
                 model=config.model.name,
                 messages=[message.to_dict() for message in messages],
+                **config.model.parameters
             )
     )
     ldclient = Deps().get_launchdarkly()
